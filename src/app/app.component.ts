@@ -23,20 +23,20 @@ export class AppComponent {
     clickedCase: Gem;
     nbKilledGem: number;
     nbOfhit: number;
-    textNbHit: string;
-    textNbKilledGem: string;
+    textNbHit: any;
+    textNbKilledGem: any;
     gemGroup: any;
     tweening: boolean;
     clicking: boolean;
     cursorOnCase: Gem;
     emitter: any;
+    fallingTween: number;
 
     constructor() {
         this.game = new Phaser.Game(1024, 768, Phaser.AUTO, 'content', {
             preload: this.preload,
             create: this.create,
             update: this.update,
-            renderTab: this.renderTab,
             checkClickOnTab: this.checkClickOnTab,
             checkMatch: this.checkMatch,
             fallGem: this.fallGem,
@@ -61,6 +61,7 @@ export class AppComponent {
         this.nbOfhit = 0;
         this.tweening = false;
         this.clicking = false;
+        this.fallingTween = 0;
     }
 
     create() {
@@ -91,7 +92,32 @@ export class AppComponent {
             this.fill(false);
         }
 
-        this.renderTab();
+        this.gemGroup.removeBetween(0);
+        for (let line = 0; line < this.nbLignes; line++) {
+            for (let column = 0; column < this.nbColonnes; column++) {
+                if (this.tabGame[line][column] != null) {
+                    switch (this.tabGame[line][column].type) {
+                        case GemColor.BLEU:
+                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'bleu');
+                            break;
+                        case GemColor.VIOLET:
+                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'violet');
+                            break;
+                        case GemColor.ORANGE:
+                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'orange');
+                            break;
+                        case GemColor.VERT:
+                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'vert');
+                            break;
+                        case GemColor.ROUGE:
+                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'rouge');
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        }
 
         // affichage nbHit et nbKill
         this.textNbHit = this.game.add.text(10, 10, 'Nombre de coups joués : ' + this.nbOfhit, {
@@ -112,9 +138,18 @@ export class AppComponent {
     }
 
     update() {
+        this.textNbKilledGem.text = 'Nombre jetons supprimés : ' + this.nbKilledGem;
 
         if (this.game.input.keyboard.isDown(Phaser.Keyboard.LEFT)) {
             this.fill(true);
+        }
+
+        if (this.game.input.keyboard.isDown(Phaser.Keyboard.RIGHT)) {
+            this.fallGem(true);
+        }
+
+        if (this.game.input.keyboard.isDown(Phaser.Keyboard.UP)) {
+            this.checkMatch(true);
         }
 
         if (this.game.input.activePointer.leftButton.isDown && !this.tweening && !this.clicking &&
@@ -132,7 +167,8 @@ export class AppComponent {
                     Math.abs(newClickedCase.column - this.clickedCase.column) === 0 ||
                     Math.abs(newClickedCase.column - this.clickedCase.column) <= 1 &&
                     Math.abs(newClickedCase.line - this.clickedCase.line) === 0) {
-                    // console.log('avant', this.tabGame);
+                    this.nbOfhit++;
+                    this.textNbHit.text = 'Nombre de coups joués : ' + this.nbOfhit;
                     this.tweening = true;
                     this.cursorOnCase = null;
                     this.graphics.clear();
@@ -157,13 +193,8 @@ export class AppComponent {
                     tween1.to({ x: sprites[1].position.x, y: sprites[1].position.y }, 500, 'Linear', true, 0);
                     tween2.to({ x: posSprites0[0], y: posSprites0[1] }, 500, 'Linear', true, 0);
                     tween2.onComplete.add(() => {
-                        while (this.checkMatch(true)) {
-                            this.fallGem(true);
-                            this.fill(true);
-                            console.log('apres', this.tabGame);
-                        }
-                        // this.renderTab();
-                        this.tweening = false;
+                        this.checkMatch(true);
+                        console.log('apres', this.tabGame);
                     }, this);
                     const type = this.clickedCase.type;
                     this.tabGame[this.clickedCase.line][this.clickedCase.column].type = newClickedCase.type;
@@ -284,6 +315,8 @@ export class AppComponent {
                     }
                 }, this);
                 spriteToDestroy.forEach(sprite => {
+                    this.nbKilledGem++;
+                    this.gemGroup.remove(sprite);
                     sprite.destroy();
                 });
                 const emitter = this.game.add.emitter((matchingGem.column * 64) + 224, (matchingGem.line * 64) + 96, 5);
@@ -293,11 +326,16 @@ export class AppComponent {
             }
             this.tabGame[matchingGem.line][matchingGem.column] = null;
         });
+        if (result) {
+            this.fallGem(emitting);
+        } else {
+            this.tweening = false;
+        }
         return result;
     }
 
     fallGem(tweening: boolean) {
-        console.log('tab in fall' + this.tabGame);
+        let noTween = true;
         for (let column = 0; column < this.nbColonnes; column++) {
             for (let line = 9; line >= 0; line--) {
                 if (this.tabGame[line][column] === null) {
@@ -312,11 +350,20 @@ export class AppComponent {
                             this.gemGroup.forEach(sprite => {
                                 if (sprite.position.x === (column * 64) + 192 &&
                                     sprite.position.y === (lineNextNonNull * 64) + 64) {
-                                        spriteToTween = sprite;
+                                    spriteToTween = sprite;
                                 }
                             });
                             const tween = this.game.add.tween(spriteToTween);
-                            tween.to({ y: (line * 64) + 64 }, 500, 'Linear', true, 0);
+                            noTween = false;
+                            tween.to({ y: (line * 64) + 64 }, 500 * (lineNextNonNull - line), 'Linear', true, 0);
+                            this.fallingTween++;
+                            tween.onComplete.add(() => {
+                                this.fallingTween--;
+                                if (this.fallingTween === 0) {
+                                    this.fill(tweening);
+                                }
+                            }, this);
+                            tween.start();
                         }
                         this.tabGame[line][column] = {
                             type: this.tabGame[lineNextNonNull][column].type,
@@ -327,6 +374,9 @@ export class AppComponent {
                     }
                 }
             }
+        }
+        if (noTween) {
+            this.fill(tweening);
         }
     }
 
@@ -360,41 +410,18 @@ export class AppComponent {
                                 default:
                                     break;
                             }
-                            console.log('tween to : ', { x: column, y: i });
                             const tween = this.game.add.tween(sprite);
                             tween.to({ x: (column * 64) + 192, y: (i * 64) + 64 }, 500 * (i + 1), 'Linear', true, 0);
+                            this.fallingTween++;
+                            tween.onComplete.add(() => {
+                                this.fallingTween--;
+                                if (this.fallingTween === 0) {
+                                    this.checkMatch(tweening);
+                                }
+                            }, this);
                         }
                     }
                     line = this.nbLignes;
-                }
-            }
-        }
-    }
-
-    renderTab() {
-        this.gemGroup.removeBetween(0);
-        for (let line = 0; line < this.nbLignes; line++) {
-            for (let column = 0; column < this.nbColonnes; column++) {
-                if (this.tabGame[line][column] != null) {
-                    switch (this.tabGame[line][column].type) {
-                        case GemColor.BLEU:
-                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'bleu');
-                            break;
-                        case GemColor.VIOLET:
-                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'violet');
-                            break;
-                        case GemColor.ORANGE:
-                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'orange');
-                            break;
-                        case GemColor.VERT:
-                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'vert');
-                            break;
-                        case GemColor.ROUGE:
-                            this.gemGroup.create(192 + (column * 64), 64 + (line * 64), 'rouge');
-                            break;
-                        default:
-                            break;
-                    }
                 }
             }
         }
