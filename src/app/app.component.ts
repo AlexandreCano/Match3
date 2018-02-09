@@ -194,7 +194,6 @@ export class AppComponent {
                     tween2.to({ x: posSprites0[0], y: posSprites0[1] }, 500, 'Linear', true, 0);
                     tween2.onComplete.add(() => {
                         this.checkMatch(true);
-                        console.log('apres', this.tabGame);
                     }, this);
                     const type = this.clickedCase.type;
                     this.tabGame[this.clickedCase.line][this.clickedCase.column].type = newClickedCase.type;
